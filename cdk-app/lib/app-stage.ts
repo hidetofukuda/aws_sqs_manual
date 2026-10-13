@@ -1,4 +1,4 @@
-import { Aspects, Stage, StageProps } from 'aws-cdk-lib';
+import { Stage, StageProps, Validations } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { AwsSolutionsChecks } from 'cdk-nag';
 import { EnvConfig } from './config';
@@ -12,6 +12,6 @@ export class AppStage extends Stage {
   constructor(scope: Construct, id: string, props: AppStageProps) {
     super(scope, id, props);
     new AppStack(this, 'App', { config: props.config });
-    Aspects.of(this).add(new AwsSolutionsChecks({ verbose: true }));
+    Validations.of(this).addPlugins(new AwsSolutionsChecks(this, { verbose: true }));
   }
 }

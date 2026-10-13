@@ -1,8 +1,7 @@
-import { Duration } from 'aws-cdk-lib';
+import { Duration, Validations } from 'aws-cdk-lib';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import { Construct } from 'constructs';
-import { NagSuppressions } from 'cdk-nag';
 
 export interface QueueWithDlqProps {
   queueName: string;
@@ -46,8 +45,9 @@ export class QueueWithDlq extends Construct {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
-    NagSuppressions.addResourceSuppressions(this.dlq, [
-      { id: 'AwsSolutions-SQS3', reason: 'This queue is itself the DLQ.' },
-    ]);
+    Validations.of(this.dlq).acknowledge({
+      id: 'AwsSolutions-SQS3',
+      reason: 'This queue is itself the DLQ.',
+    });
   }
 }

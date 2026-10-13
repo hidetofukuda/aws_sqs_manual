@@ -1,11 +1,10 @@
-import { Duration, Stack, StackProps } from 'aws-cdk-lib';
+import { Duration, Stack, StackProps, Validations } from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { Construct } from 'constructs';
-import { NagSuppressions } from 'cdk-nag';
 import { EnvConfig } from './config';
 import { QueueWithDlq } from './constructs/queue-with-dlq';
 
@@ -59,18 +58,9 @@ export class AppStack extends Stack {
 
     table.grantWriteData(consumer);
 
-    NagSuppressions.addResourceSuppressions(
-      consumer,
-      [
-        {
-          id: 'AwsSolutions-IAM4',
-          reason: 'AWSLambdaBasicExecutionRole is the minimal managed policy for CloudWatch Logs.',
-          appliesTo: [
-            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-          ],
-        },
-      ],
-      true,
-    );
+    Validations.of(consumer).acknowledge({
+      id: 'AwsSolutions-IAM4[Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole]',
+      reason: 'AWSLambdaBasicExecutionRole is the minimal managed policy for CloudWatch Logs.',
+    });
   }
 }
