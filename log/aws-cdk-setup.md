@@ -76,20 +76,99 @@ npx cdk --version
 
 ## 3. AWS 認証情報の準備
 
-IAM Identity Center（AWS SSO）を使う場合は、プロファイルを設定したうえでログインします。
+CDK は、AWS CLI と同じ認証情報（プロファイル）を使ってデプロイします。開発用と本番用の 2 アカウントを使い分ける場合は、IAM Identity Center（AWS SSO）で、人ごとに一時的な認証情報を発行する方式を推奨します。
+
+<!-- TODO ここまで対応した -->
+
+### 3-1. 既存の IAM ユーザー・グループは作り直さない
+
+IAM Identity Center は、各アカウントの IAM とは別の仕組みです。
+
+| | IAM ユーザー・IAM グループ | IAM Identity Center のユーザー・グループ |
+| --- | --- | --- |
+| 管理される場所 | アカウントごと（開発・本番で別々） | AWS Organizations 全体で 1 か所 |
+| 認証情報 | 長期のアクセスキー | 数時間で失効する一時的な認証情報 |
+| 権限の定義 | IAM ポリシー | 許可セット（Permission Set） |
+
+- 既存の IAM ユーザーやグループは、そのまま残して問題ありません。Identity Center の設定を追加しても影響しません。
+- Identity Center 側には、グループ・ユーザー・許可セットを新規に作成します。許可セットをアカウントに割り当てると、各アカウントに `AWSReservedSSO_...` という IAM ロールが自動作成されます。
+- 移行の目安は次のとおりです。SSO でデプロイできることを確認したあと、不要になったアクセスキーを無効化し、最後に IAM ユーザーを整理します。
+
+前提として、開発用と本番用のアカウントが同じ AWS Organizations に属している必要があります。Organizations を使っていない場合は、先に組織を作成してアカウントを招待・追加してください。
+
+### 3-2. Identity Center の設定（管理者が一度だけ行う）
+
+AWS マネジメントコンソールで、管理アカウント（Organizations の管理アカウント）にサインインして設定します。
+
+1. **有効化**: IAM Identity Center を、デプロイに使うリージョンで有効にします。リージョンはあとから変更できないため、先に決めてください。
+2. **グループの作成**: 役割ごとにグループを作ります。例: `Developers`（開発者）、`ProdDeployers`（本番デプロイ担当）。
+3. **ユーザーの作成**: ユーザーを作成し、グループに追加します。
+4. **許可セットの作成**: 権限のひな形です。例: `DevAdmin`（開発用に広い権限）、`ProdDeploy`（本番用に必要最小限の権限）。
+5. **アカウントへの割り当て**: 「どのグループに、どのアカウントで、どの許可セットを与えるか」を設定します。
+
+| グループ | 開発アカウント | 本番アカウント |
+| --- | --- | --- |
+| `Developers` | `DevAdmin` | 割り当てなし（アクセス不可） |
+| `ProdDeployers` | `DevAdmin` | `ProdDeploy` |
+
+開発環境では自由に試せるようにしつつ、本番環境は限られたグループだけが操作できるようにします。権限は最初から絞りすぎず、まず動かしてから狭めていく進め方でも構いません。
+
+### 3-3. プロファイルの設定とログイン（利用者ごとに行う）
+
+AWS CLI にプロファイルを登録します。開発用と本番用で、それぞれ 1 つずつ作成します。
 
 ```bash
 aws configure sso
-aws sso login --profile PROFILE_NAME
 ```
 
-アクセスキーなど、別の認証方式を使う場合は AWS CLI の認証設定を済ませます。認証先アカウントを確認してください。
+<!-- TODO ここまで identity centerで設定したユーザーでログインする手順、3-1から見直す必要あり -->
+
+対話形式で次の項目を聞かれます。
+
+- `SSO session name`: セッションの名前（例: `my-sso`）。2 つ目のプロファイルでは同じ名前を再利用できます。
+- `SSO start URL`: Identity Center のポータル URL（例: `https://d-xxxxxxxxxx.awsapps.com/start`）
+- `SSO region`: Identity Center を有効にしたリージョン
+- `SSO registration scopes`: 通常は `sso:account:access`
+- そのあと、ブラウザーで認可すると、アクセスできるアカウントと許可セットの一覧が表示されるので、使うものを選びます。
+- `CLI default client Region`: デプロイ先のリージョン（例: `ap-northeast-1`）
+- `CLI profile name`: プロファイル名（例: `dev`、`prod`）
+
+設定は `~/.aws/config` に保存されます。ログインは、SSO セッション単位で 1 回行えば、同じセッションを使うプロファイルすべてに有効です。
 
 ```bash
-aws sts get-caller-identity --profile PROFILE_NAME
+aws sso login --profile dev
 ```
 
-コマンドで `--profile PROFILE_NAME` を省略する場合は、利用する認証情報とデフォルトリージョンが `default` プロファイルに設定されていることを確認します。CDK アプリのスタック定義でアカウントやリージョンを明示する場合は、その設定が CLI の値より優先されます。
+一時的な認証情報は期限が切れるので、失効したら同じコマンドで再ログインします。
+
+### 3-4. 認証先アカウントの確認
+
+デプロイ先を取り違えないよう、実行前に必ず確認します。
+
+<!-- TODO 今の自分のユーザーを取得するコマンド　作業前に必須 -->
+```bash
+aws sts get-caller-identity --profile namacha_dev
+
+aws sts get-caller-identity --profile prod
+```
+
+出力の `Account` が、意図したアカウント ID になっていることを確認してください。
+
+### 3-5. プロファイルを省略する場合
+
+コマンドの `--profile` を省略すると、`default` プロファイルが使われます。本番アカウントを誤って操作するのを防ぐため、複数アカウントを扱う場合は `default` に頼らず、毎回 `--profile` を明示するか、環境変数 `AWS_PROFILE` を設定して使ってください。
+
+```bash
+export AWS_PROFILE=dev
+```
+
+CDK アプリのスタック定義でアカウントやリージョンを明示している場合は、その設定が CLI の値より優先されます。CLI のプロファイルと、スタック定義の `env` が異なるアカウントを指していると、デプロイ時にエラーになったり、意図しないアカウントが対象になったりします。
+
+### 3-6. アクセスキーを使う場合
+
+Identity Center を導入できない場合は、IAM ユーザーのアクセスキーを `aws configure --profile dev` で登録する方法もあります。ただし、長期のキーは漏えい時の影響が大きく、アカウントごとに別のキーを管理する必要があります。特に本番アカウントでは、Identity Center への移行を推奨します。
+
+> 公式ドキュメント: [IAM Identity Center を使用するための AWS CLI の設定](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html)、[許可セット](https://docs.aws.amazon.com/singlesignon/latest/userguide/permissionsetsconcept.html)
 
 ## 4. CDK アプリの作成
 
