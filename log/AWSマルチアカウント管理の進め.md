@@ -1,9 +1,11 @@
 ---
-title: <記事タイトル（検索されやすいキーワードを含める）>
+title: AWS試験で習ったIAM、実務ではIdentity Centerを使うべき理由
 tags:
-  - タグ1
-  - タグ2
-  - タグ3
+  - AWS
+  - AWS初心者
+  - 初心者
+  - IAMIdentityCenter
+  - セキュリティ
 private: true
 updated_at: ''
 id: null
@@ -94,15 +96,16 @@ identity centerの方が、組織でのログイン管理も楽になるし、SS
 
 ## まとめ
 
-- ポイント1
-- ポイント2
-- ポイント3
+- IAMよりもIdentity centerを使うと幸せ
+- SSOに対応しており、社内の認証基盤（IdP）と連携してログインを一元管理できる
+- 今からAWSを利用するなら、Identity centerがよい
 
 <今後の展望や次に試したいことを1〜2文で>
+企業で使う場合、AWSControlCenterも視野に入ってくるらしい
 
 ## 参考
 
-- [タイトル](URL)
+- [AWS の クラウドが選ばれる 10 の理由]([(https://aws.amazon.com/jp/aws-ten-reasons/]))
 - [タイトル](URL)
 
 ---
